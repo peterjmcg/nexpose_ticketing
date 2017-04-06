@@ -13,8 +13,9 @@ class IPMode < BaseMode
   end
 
   # Returns the ticket's title
+  #Update for Tyson - added Vulnerability Management
   def get_title(row)
-    truncate_title "#{row['ip_address']} => Vulnerabilities"
+    truncate_title "Vulnerability Management: #{row['ip_address']} => Vulnerabilities"
   end
 
   # Generates a unique identifier for a ticket

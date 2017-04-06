@@ -260,6 +260,11 @@ module NexposeTicketing
       end 
 
       report_config.add_filter('vuln-severity', options[:severity] || 0)
+	  
+	  #Update for Tyson. Add filter for vulnerability status (corresponds to Vulnerability Test Result code)
+	  unless options[:vuln_status] == nil
+        report_config.add_filter('vuln-status', options[:vuln_status] )
+      end
 
       vuln_filter_cats = createVulnerabilityFilter(options)
 

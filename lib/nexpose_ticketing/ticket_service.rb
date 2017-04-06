@@ -74,6 +74,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       @options = service_data[:options]
       @options[:file_name] = @options[:file_name].to_s
       @options[:scan_mode] = get_scan_mode
+	  
+	  #Update for Tyson
+	  if (@options[:scan_mode] != 'site') && (@options[:scan_mode] != 'tag')
+	  then
+			fail 'Invalid scan mode. No sites or tags defined in config file'
+	  end
       
       #Temporary - this should be refactored out e.g. to include DAGs
       @options[:tag_run] = @options[:scan_mode] == 'tag'
@@ -278,9 +284,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       end 
     end
 
+	#Update for Tyson. Check for empty site list.
     def get_scan_mode
       return 'tag' unless @options[:tags].nil? || @options[:tags].empty?
-      return 'site'
+      return 'site' unless @options[:sites].nil? || @options[:sites].empty?
+	  return 'invalid'
     end
 
     # Starts the Ticketing Service.
@@ -344,6 +352,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       scan_options = { scan_id: file_site_histories[nexpose_item],
                        nexpose_item: nexpose_item,
                        severity: options[:severity],
+					   #Update for Tyson. New option vuln_status
+					   vuln_status: options[:vuln_status],
                        ticket_mode: options[:ticket_mode],
                        riskScore: options[:riskScore],
                        vulnerabilityCategories: options[:vulnerabilityCategories],

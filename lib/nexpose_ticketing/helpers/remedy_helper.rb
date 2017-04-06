@@ -10,6 +10,10 @@ require_relative './base_helper'
 
 # Serves as the Remedy interface for creating/updating issues from 
 # vulnelrabilities found in Nexpose.
+
+# Update for Tyson.
+# Mods for Tyson: Update ticket fields in generate_new_ticket, update get_client, update WSDL names, update check for error code in query_for_ticket.
+
 class RemedyHelper < BaseHelper
   attr_accessor :log, :client
   def initialize(service_data, options, mode)
@@ -24,15 +28,27 @@ class RemedyHelper < BaseHelper
   def generate_new_ticket(extra_fields=nil)
     base_ticket = {
       'First_Name' => "#{@service_data[:first_name]}",
-        'Impact' => '1-Extensive/Widespread',
+        'Impact' => '4-Minor/Localized',
         'Last_Name' => "#{@service_data[:last_name]}",
-        'Reported_Source' => 'Other',
+        'Reported_Source' => 'Web',
         'Service_Type' => 'Infrastructure Event',
         'Status' => 'New',
         'Action' => 'CREATE',
         "Summary"=>"",
         "Notes"=>"",
-        'Urgency' => '1-Critical',
+        'Urgency' => '4-Low',
+		#Added fields
+		'Assigned_Group' => 'IS Security Engineering',
+		'Assigned_Support_Company' => 'Tyson Foods, Inc.',
+		'Assigned_Support_Organization' => 'Information Systems',
+		'Manufacturer' => 'Rapid7 LLC.',
+		'Product_Categorization_Tier_1' => 'Software',
+		'Product_Categorization_Tier_2' => 'Application',
+		'Product_Categorization_Tier_3' => 'Security and Vulnerability Management Software',
+		'Product_Name' => 'Nexpose Scan Engine',
+		'Work_Info_Locked' => 'No',
+		'Work_Info_View_Access' => 'Internal',
+		'Login_ID' => 'Nexpose'
     }
     extra_fields.each { |k, v| base_ticket[k.to_s] = v } if extra_fields
     base_ticket
@@ -48,10 +64,17 @@ class RemedyHelper < BaseHelper
   def get_client(wdsl, endpoint)
     Savon.client(wsdl:  File.join(File.dirname(__FILE__), "../config/remedy_wsdl/#{wdsl}"),
                  adapter: :net_http,
+				 follow_redirects: true,
+				 log: true,
+				 log_level: :debug,
+				 filters: [],
+				 strip_namespaces: true,
+				 #env_namespace: :soapenv,
                  ssl_verify_mode: :none,
                  open_timeout: @service_data[:open_timeout],
                  read_timeout: @service_data[:read_timeout],
-                 endpoint: @service_data[endpoint.intern],
+				 #Get endpoint from WSDL
+                 #endpoint: @service_data[endpoint.intern],
                  soap_header: { 'AuthenticationInfo' => 
                                   { 'userName' => "#{@service_data[:username]}",
                                     'password' => "#{@service_data[:password]}",
@@ -93,7 +116,7 @@ class RemedyHelper < BaseHelper
   def create_tickets(tickets)
     fail 'Ticket(s) cannot be empty' if tickets.nil? || tickets.empty?
     @metrics.created tickets.count
-    client = get_client('HPD_IncidentInterface_Create_WS.xml', :create_soap_endpoint)
+    client = get_client('HPD_IncidentInterface_Create_WS.wsdl', :create_soap_endpoint)
     send_tickets(client, :help_desk_submit_service, tickets)
   end
 
@@ -109,7 +132,7 @@ class RemedyHelper < BaseHelper
       return
     end
     @metrics.updated tickets.count - @metrics.get_created
-    client = get_client('HPD_IncidentInterface_WS.xml', :query_modify_soap_endpoint)
+    client = get_client('HPD_IncidentInterface_WS.wsdl', :query_modify_soap_endpoint)
     send_tickets(client, :help_desk_modify_service, tickets)
   end
   
@@ -125,7 +148,7 @@ class RemedyHelper < BaseHelper
       return
     end
     @metrics.closed tickets.count
-    client = get_client('HPD_IncidentInterface_WS.xml', :query_modify_soap_endpoint)
+    client = get_client('HPD_IncidentInterface_WS.wsdl', :query_modify_soap_endpoint)
     send_tickets(client, :help_desk_modify_service, tickets)
   end  
   
@@ -138,20 +161,26 @@ class RemedyHelper < BaseHelper
   #   - Remedy incident information in hash format or nil if no results are found.
   #
   def query_for_ticket(unique_id)
-    client = get_client('HPD_IncidentInterface_WS.xml', :query_modify_soap_endpoint)
+    client = get_client('HPD_IncidentInterface_WS.wsdl', :query_modify_soap_endpoint)
 
     begin
-      response = client.call(:help_desk_query_list_service, message: {'Qualification' => "'Status' < \"Closed\" AND 'Detailed Decription' LIKE \"%#{unique_id}%\""})
+	  #Update for Tyson - fix query parameters
+      response = client.call(:help_desk_query_list_service, message: {'Qualification' => "'Status' != \"Closed\" AND 'Status' != \"Cancelled\" AND 'Status' != \"Resolved\" AND 'Description' LIKE \"%Vulnerability Management%\" AND '1000000151' LIKE \"%#{unique_id}\""})
     rescue Savon::SOAPFault => e
       @log.log_message("SOAP exception in query ticket: #{e.message}")
       return if e.to_hash[:fault][:faultstring].index("ERROR (302)") == 0
+      #if e.message.include? "ERROR (302)" then return nil
+	  #else
       raise
+	  #end
     rescue Savon::HTTPError => e
       @log.log_message("HTTP error in query ticket: #{e.message}")
       raise
     end
     
     response.body[:help_desk_query_list_service_response][:get_list_values]
+	
+	
   end
 
   # Prepare tickets from the CSV of vulnerabilities exported from Nexpose. This method determines 
